@@ -140,3 +140,22 @@ screencap.png
 tmp
 
 external/LibreHardwareMonitor/LibreHardwareMonitorLib.sys
+*SYMLINK
+*.todo
+log.log
+*~
+*.bak
+__ * __
+*.deprecated
+*.dep
+*.deprecated/
+*.dep/
+BAK/
+hold/
+hold1/
+hold2/
+hold2/
+hold2/
+hold2/
+*.tmp
+*.log
