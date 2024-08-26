@@ -10,7 +10,7 @@ jobs:
   system-monitor-theme-screenshot:
   
     # Don't run this action on forked repositories to avoid conflicts in PR...
-    if: github.repository == 'mathoudebine/turing-smart-screen-python'
+    if: github.repository == 'claire_cjs/turing-smart-screen-python-winamp-dashboard'
     
     runs-on: ubuntu-latest
 

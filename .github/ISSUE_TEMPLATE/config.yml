@@ -1,11 +1,12 @@
 blank_issues_enabled: false
 contact_links:
   - name: FAQ / Troubleshooting
-    url: https://github.com/mathoudebine/turing-smart-screen-python/wiki/Troubleshooting
+    url: https://github.com/claire_cjs/turing-smart-screen-python-winamp-dashboard/wiki/Troubleshooting
     about: ⚠️ Please check the FAQ page before opening a new issue.
   - name: Existing issues
-    url: https://github.com/mathoudebine/turing-smart-screen-python/issues?q=is%3Aissue+
+    url: https://github.com/claire_cjs/turing-smart-screen-python-winamp-dashboard/issues?q=is%3Aissue+
     about: ⚠️ Please search for existing issues first before opening a new one.
   - name: Discussions
-    url: https://github.com/mathoudebine/turing-smart-screen-python/discussions
+    url: https://github.com/claire_cjs/turing-smart-screen-python-winamp-dashboard/discussions
     about: ℹ️ Use the discussion space to share your experience, ask questions and discuss with the community without opening issues. 
+
