@@ -140,7 +140,7 @@ screencap.png
 tmp
 
 external/LibreHardwareMonitor/LibreHardwareMonitorLib.sys
-
+*SYMLINK
 *.todo
 log.log
 *~
