@@ -21,11 +21,11 @@ To get this to work:
       (This is done because there are many song names and band names that have hyphens in them, and it can be confusing where to split something like "One - Two - Three - Four - Five - Six".  Is it a band named "One - Two - Three - Four" who has a song named "Five - Six", or is it a band named "One - Two" who has a song named "Three - For - Five - Six"?  The ambiguity disappears if you use a wider en-dash (–) to separate the artist from the track title. And frankly it looks better.)
 
 1. Configure WinAmp to save the song info & album art of the current song playing song to a file. This allows us to grab that information with fewer resources than sending it through API calls. And allows one to get the same feed on a different computer.
-    * 1. Unzip [Aldviva's](https://github.com/Aldaviva) [NowPlayingToFile plugin](https://github.com/Aldaviva/WinampNowPlayingToFile/releases/latest/download/WinampNowPlayingToFile.zip) into your WinAmp folder, right next to ```WinAmp.exe```. 
-    * Restart WinAmp
+    * *Unzip* [Aldviva's](https://github.com/Aldaviva) [NowPlayingToFile plugin](https://github.com/Aldaviva/WinampNowPlayingToFile/releases/latest/download/WinampNowPlayingToFile.zip) into your ```WinAmp``` *base* folder, right next to ```WinAmp.exe```. 
+    * *Restart* ```WinAmp```
     * Go into ```WinAmp->Preferences```, to the ```Plug-ins``` section (closer to the bottom)
     * Expand the ```Plug-ins``` section to locate the ```General Purpose``` settings (5 lines underneath)
-    * In the right pane, your plugins should be listed, and you should see ```Now Playing To File v2.2.0``` as one of the plugins.
+    * In the *right* pane, your plugins should be listed, and you should see ```Now Playing To File v2.2.0``` as one of the plugins.
     * Click ```Configure selected plug-in``` to open up the ```Now Playing To File plug-in configuration``` pop-up.
     * If you change the format of the plugin's info file, please only add new stuff to the end 😉
     * Change the ```Save album art as``` file location if you are inclined and adventurous  
