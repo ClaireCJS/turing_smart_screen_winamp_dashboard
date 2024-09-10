@@ -15,10 +15,10 @@ To get this to work:
     * Go into ```WinAmp->Preferences```, to the ```Titles``` section (the 5th line on the left). 
     * Look for the ```Advanced Title Formatting``` section on the right
     * Make sure ```Use Advanced title formatting when possible``` is *checked*
-    * Change the hypen (-) after ```%artist%``` into an en-dash (–).
-    * I prefer the following avanced title display format:<BR>
+    * Change the *hypen* (-) after ```%artist%``` into an *en-dash* (–). VERY IMPORTANT.
+    * _CAUTION:_  It's entirely possible this situation will break if you deviate too much from the WinAmp title format that I use. The most important thing is that there is an *en-dash* separating the *band* from the *song title*. Lord help you if the song title itself has an en-dash in it — But fortunately most song titles that have dashes either use hyphens (in modern times) or em-dashes (in the days of wax cylinder records). Anyway, just in case it matters, this is the advanced title display format I use:<BR>
       ```[%artist% – ]$if2(%title%,$filepart(%filename%))')```
-    * This is done because there are many song names and band names that have hyphens in them, and it can be confusing where to split something like "One - Two - Three - Four - Five - Six".  Is it a band named "One - Two - Three - Four" who has a song named "Five - Six", or is it a band named "One - Two" who has a song named "Three - For - Five - Six"?  The ambiguity disappears if you use a wider en-dash (–) to separate the artist from the track title. And frankly it looks better.
+      (This is done because there are many song names and band names that have hyphens in them, and it can be confusing where to split something like "One - Two - Three - Four - Five - Six".  Is it a band named "One - Two - Three - Four" who has a song named "Five - Six", or is it a band named "One - Two" who has a song named "Three - For - Five - Six"?  The ambiguity disappears if you use a wider en-dash (–) to separate the artist from the track title. And frankly it looks better.)
 
 1. Configure WinAmp to save the song info & album art of the current song playing song to a file. This allows us to grab that information with fewer resources than sending it through API calls. And allows one to get the same feed on a different computer.
     * 1. Unzip [Aldviva's](https://github.com/Aldaviva) [NowPlayingToFile plugin](https://github.com/Aldaviva/WinampNowPlayingToFile/releases/latest/download/WinampNowPlayingToFile.zip) into your WinAmp folder, right next to ```WinAmp.exe```. 
