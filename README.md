@@ -1,5 +1,83 @@
 # ![Icon](https://raw.githubusercontent.com/mathoudebine/turing-smart-screen-python/main/res/icons/monitor-icon-17865/24.png) turing-smart-screen-python
 
+
+### How to get this project to work:
+
+This is basicaly functionality that I wrote on top of the ```turing_smart_screen-python``` project, which had a couple enhancements made.
+
+To get this to work:
+
+1. Be a WinAmp & Python user 😉
+
+1. Buy one of the usb screens below ($13 on AliExpress as of 2024/08/15)
+
+1. Change WinAmp's title formatting so that we can parse artist & band properly:
+    * Go into ```WinAmp->Preferences```, to the ```Titles``` section (the 5th line on the left). 
+    * Look for the ```Advanced Title Formatting``` section on the right
+    * Make sure ```Use Advanced title formatting when possible``` is *checked*
+    * Change the hypen (-) after ```%artist%``` into an en-dash (–).
+    * I prefer the following avanced title display format:<BR>
+      ```[%artist% – ]$if2(%title%,$filepart(%filename%))')```
+    * This is done because there are many song names and band names that have hyphens in them, and it can be confusing where to split something like "One - Two - Three - Four - Five - Six".  Is it a band named "One - Two - Three - Four" who has a song named "Five - Six", or is it a band named "One - Two" who has a song named "Three - For - Five - Six"?  The ambiguity disappears if you use a wider en-dash (–) to separate the artist from the track title. And frankly it looks better.
+
+1. Configure WinAmp to save the song info & album art of the current song playing song to a file. This allows us to grab that information with fewer resources than sending it through API calls. And allows one to get the same feed on a different computer.
+    * 1. Unzip [Aldviva's](https://github.com/Aldaviva) [NowPlayingToFile plugin](https://github.com/Aldaviva/WinampNowPlayingToFile/releases/latest/download/WinampNowPlayingToFile.zip) into your WinAmp folder, right next to ```WinAmp.exe```. 
+    * Restart WinAmp
+    * Go into ```WinAmp->Preferences```, to the ```Plug-ins``` section (closer to the bottom)
+    * Expand the ```Plug-ins``` section to locate the ```General Purpose``` settings (5 lines underneath)
+    * In the right pane, your plugins should be listed, and you should see ```Now Playing To File v2.2.0``` as one of the plugins.
+    * Click ```Configure selected plug-in``` to open up the ```Now Playing To File plug-in configuration``` pop-up.
+    * If you change the format of the plugin's info file, please only add new stuff to the end 😉
+    * Change the ```Save album art as``` file location if you are inclined and adventurous  
+      (If you do, make sure to change both locations, so that they stay in the same folder together.)
+    * Take note of the ```Save album art as``` location — whether you changed it or not.
+    * Go to the next track, and verify that the album art correctly saved to that location
+
+1. Let this program know where those files are.
+    * set an environment variable called ```NOW_PLAYING_SONG_INFO``` to point to the location of the txt file
+    * set an environment variable called ```NOW_PLAYING_ALBUM_ART``` to point to the location of the jpg file
+```
+   rem EXAMPLE:
+   set NOW_PLAYING_ALBUM_ART=c:\mp3\lists\winamp_now_playing.jpg
+   set NOW_PLAYING_SONG_INFO=c:\mp3\lists\winamp_now_playing.txt
+```
+    
+1. Configure options in the ```winamp_dashboard.py`` script. At this point, relevant instructions in the configuration section at the top of that file, and more likely to be up-to-date and accurate there.   Set things like:
+	* Do you want to    blur    the background cover art to make information easier to read? How much?
+	* Do you want to colorshift the background cover art to make information easier to read? Which colors and how much? Green font?  Shift green down 40 by setting colorshift to (0,0,-40)!
+	* Is your frame upside-down or not? (because the cable comes out in the wrong direction for your situation)
+	* Do you want the clock in the corner? Do you want it to display the seconds as well?
+	* What color(s) do you want the progress bar to be? 
+	* Do you even want a progress bar? [if you don't: might want to expand–and–move-up cover art by 40px]
+	* What font do you want the information to be?
+	* Do you want it to tell you what you're watching in VLCplayer too? 
+	* How long do you want to wait after drawing each element?
+
+
+
+# You're done!  But there are some potential bonus features:
+
+1. For VLC functionality (experimental):
+	* make sure ```vlc.exe``` is always called with the ```--extraintf http --http-password password``` options to open access to VLCplayer
+	* install the python-vlc library with ```pip install python-vlc```
+	* if you see a bunch of ```stale plugins cache``` errors, you can fix with ```"C:\Program Files\VideoLAN\VLC\vlc-cache-gen.exe" "C:\Program Files\VideoLAN\VLC\plugins"``` (found the [answer here](https://stackoverflow.com/questions/68246840/how-to-avoid-main-libvlc-error-when-using-the-python-vlc-package)])
+	* Enable the HTTP Interface in VLC:
+		* Open *VLC* and go to ```Tools > Preferences```.
+		* At the bottom, select ```All``` under ```Show settings```.
+		* Search for ```lua``` in the search box. (Alternate instructions are to navigate to ```Interface > Main``` interfaces and check the ```HTTP``` checkbox, but I think searching is easier.)
+		* Under ```Interface > Main interfaces > Lua```, you can set a password for the HTTP interface. Use ```winampdashboard``` as a password if you don't want to change what I've hardcoded already
+		* Set the port to ```8080```.  My default was something else, but the ```python-vlc``` library instructions mention port 8080 a
+		* The HTTP interface will run on *localhost:8080 by* default, or whatever alternate port you just chose.
+
+
+
+
+
+
+
+```
+
+
 ### ⚠️ DISCLAIMER - PLEASE READ ⚠️
 
 This project is **not affiliated, associated, authorized, endorsed by, or in any way officially connected with Turing / XuanFang / Kipye brands**, or any of theirs subsidiaries, affiliates, manufacturers or sellers of their products. All product and company names are the registered trademarks of their original owners.
@@ -9,10 +87,8 @@ This project is an open-source alternative software, NOT the original software p
 * for other smart screens, contact your reseller
 ---
 
-![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black) ![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white) ![macOS](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=apple&logoColor=white) ![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-A22846?style=for-the-badge&logo=Raspberry%20Pi&logoColor=white) ![Python](https://img.shields.io/badge/Python-3.8/3.12-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54) [![Licence](https://img.shields.io/github/license/mathoudebine/turing-smart-screen-python?style=for-the-badge)](./LICENSE)
-  
 
-A Python system monitor program and an abstraction library for **small IPS USB-C (UART) displays.**    
+A Python Winamp monitor program for **small IPS USB-C (UART) displays.**    
 
 Supported operating systems : macOS, Windows, Linux (incl. Raspberry Pi), basically all OS that support Python 3.8+  
 

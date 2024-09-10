@@ -25,6 +25,7 @@ import numpy as np
 from library.lcd.lcd_comm import *
 from library.log import logger
 
+from typing import Tuple
 
 class Command(IntEnum):
     RESET = 101  # Resets the display
@@ -100,34 +101,51 @@ class LcdCommRevA(LcdComm):
 
         if response == SubRevision.USBMONITOR_3_5.value:
             self.sub_revision = SubRevision.USBMONITOR_3_5
-            self.display_width = 320
+            self.display_width  = 320
             self.display_height = 480
         elif response == SubRevision.USBMONITOR_5.value:
             self.sub_revision = SubRevision.USBMONITOR_5
-            self.display_width = 480
+            self.display_width  = 480
             self.display_height = 800
         elif response == SubRevision.USBMONITOR_7.value:
             self.sub_revision = SubRevision.USBMONITOR_7
-            self.display_width = 600
+            self.display_width  = 600
             self.display_height = 1024
         else:
             self.sub_revision = SubRevision.TURING_3_5
-            self.display_width = 320
+            self.display_width  = 320
             self.display_height = 480
 
         logger.debug("HW sub-revision: %s" % (str(self.sub_revision)))
 
-    def InitializeComm(self):
-        self._hello()
+    def InitializeComm(self, exception_sleep_time=1):
+        try:
+            self._hello()
+        except Exception as e:
+            print(f"Exception {e}")
+            time.sleep(exception_sleep_time)
 
-    def Reset(self):
+
+
+    def Reset(self, sleep_time=5):
         logger.info("Display reset (COM port may change)...")
         # Reset command bypasses queue because it is run when queue threads are not yet started
         self.SendCommand(Command.RESET, 0, 0, 0, 0, bypass_queue=True)
         self.closeSerial()
         # Wait for display reset then reconnect
-        time.sleep(5)
+        time.sleep(sleep_time)
         self.openSerial()
+
+    # (copied from lcd_comm.py)
+    def open_image(self, bitmap_path: str, use_cache=True) -> Image:
+        if use_cache:
+            if bitmap_path not in self.image_cache:
+                self.image_cache[bitmap_path] = Image.open(bitmap_path)
+                logger.debug("Bitmap " + bitmap_path + " is now loaded in the cache")
+            return copy.copy(self.image_cache[bitmap_path])
+        else:
+            return Image.open(bitmap_path)
+
 
     def Clear(self):
         self.SetOrientation(Orientation.PORTRAIT)  # Bug: orientation needs to be PORTRAIT before clearing
@@ -138,7 +156,7 @@ class LcdCommRevA(LcdComm):
         self.SendCommand(Command.SCREEN_OFF, 0, 0, 0, 0)
 
     def ScreenOn(self):
-        self.SendCommand(Command.SCREEN_ON, 0, 0, 0, 0)
+        self.SendCommand(Command.SCREEN_ON , 0, 0, 0, 0)
 
     def SetBrightness(self, level: int = 25):
         assert 0 <= level <= 100, 'Brightness level must be [0-100]'
@@ -150,30 +168,35 @@ class LcdCommRevA(LcdComm):
         # Level : 0 (brightest) - 255 (darkest)
         self.SendCommand(Command.SET_BRIGHTNESS, level_absolute, 0, 0, 0)
 
-    def SetOrientation(self, orientation: Orientation = Orientation.PORTRAIT):
+    def SetOrientation(self, orientation: Orientation = Orientation.PORTRAIT, exception_sleep_time=3):
         self.orientation = orientation
-        width = self.get_width()
+        width  = self.get_width ()
         height = self.get_height()
-        x = 0
-        y = 0
+        x  = 0
+        y  = 0
         ex = 0
         ey = 0
         byteBuffer = bytearray(16)
-        byteBuffer[0] = (x >> 2)
-        byteBuffer[1] = (((x & 3) << 6) + (y >> 4))
-        byteBuffer[2] = (((y & 15) << 4) + (ex >> 6))
-        byteBuffer[3] = (((ex & 63) << 2) + (ey >> 8))
-        byteBuffer[4] = (ey & 255)
-        byteBuffer[5] = Command.SET_ORIENTATION
-        byteBuffer[6] = (orientation + 100)
-        byteBuffer[7] = (width >> 8)
-        byteBuffer[8] = (width & 255)
-        byteBuffer[9] = (height >> 8)
+        byteBuffer[ 0] =   ( x >> 2)
+        byteBuffer[ 1] = ((( x &  3) << 6) + ( y >> 4))
+        byteBuffer[ 2] = ((( y & 15) << 4) + (ex >> 6))
+        byteBuffer[ 3] = (((ex & 63) << 2) + (ey >> 8))
+        byteBuffer[ 4] =   (ey & 255)
+        byteBuffer[ 5] = Command.SET_ORIENTATION
+        byteBuffer[ 6] = (orientation + 100)
+        byteBuffer[ 7] = (width  >>  8)
+        byteBuffer[ 8] = (width  & 255)
+        byteBuffer[ 9] = (height >>  8)
         byteBuffer[10] = (height & 255)
-        self.lcd_serial.write(bytes(byteBuffer))
+        try:
+            self.lcd_serial.write(bytes(byteBuffer))
+        except Exception as e:
+            print(f"Sleeping {exception_sleep_time} seconds due to exception: {e}")
+            time.sleep(exception_sleep_time)
+
 
     @staticmethod
-    def imageToRGB565LE(image: Image):
+    def imageToRGB565LE(image: Image, use_colorshift: bool = False, colorshift: Tuple[int, int, int] = (0,0,0)):
         if image.mode not in ["RGB", "RGBA"]:
             # we need the first 3 channels to be R, G and B
             image = image.convert("RGB")
@@ -189,50 +212,64 @@ class LcdCommRevA(LcdComm):
         g = rgb[:, 1].astype(np.uint16)
         b = rgb[:, 2].astype(np.uint16)
 
+        # shift if asked
+        if use_colorshift: (r_shift, g_shift, b_shift) = colorshift
+        else:              (r_shift, g_shift, b_shift) = (0, 0, 0)
+
         # construct RGB565
-        r = (r >> 3)
-        g = (g >> 2)
-        b = (b >> 3)
+        r_shift = 3 + r_shift
+        g_shift = 2 + g_shift
+        b_shift = 3 + b_shift
+        #if we wanted random shifting, it could look a bit like this:     #import random        #random.randint(-2, 2)        #g_shift = g_shift + random.randint(1, 2)
+        r = (r >> r_shift)
+        g = (g >> g_shift)
+        b = (b >> b_shift)
         rgb565 = (r << 11) | (g << 5) | b
 
         # serialize to little-endian
         return rgb565.newbyteorder('<').tobytes()
+
 
     def DisplayPILImage(
             self,
             image: Image,
             x: int = 0, y: int = 0,
             image_width: int = 0,
-            image_height: int = 0
+            image_height: int = 0,
+            use_cache: bool = True,
+            use_colorshift: bool = False,
+            colorshift: Tuple[int, int, int] = (0,0,0),
     ):
+        logger.debug(f"\tlcd_comm_rev_a: DisplayPILImage. [0] is being run on an image of dimensions {image.size[0]}x{image.size[1]}")
         width, height = self.get_width(), self.get_height()
+        logger.debug(f"\tlcd_comm_rev_a: DisplayPILImage. [2] image_width/h={image_width}x{image_height},actual={image.size[0]}x{image.size[1]}")
 
         # If the image height/width isn't provided, use the native image size
-        if not image_height:
-            image_height = image.size[1]
-        if not image_width:
-            image_width = image.size[0]
+        if not image_width:  image_width  = image.size[0]
+        if not image_height: image_height = image.size[1]
 
-        assert x <= width, 'Image X coordinate must be <= display width'
-        assert y <= height, 'Image Y coordinate must be <= display height'
+        assert x <= width,       'Image X coordinate must be <= display width'
+        assert y <= height,      'Image Y coordinate must be <= display height'
         assert image_height > 0, 'Image height must be > 0'
-        assert image_width > 0, 'Image width must be > 0'
+        assert image_width  > 0, 'Image width  must be > 0'
 
         # If our image size + the (x, y) position offsets are bigger than
         # our display, reduce the image size to fit our screen
-        if x + image_width > width:
-            image_width = width - x
-        if y + image_height > height:
-            image_height = height - y
+        if x + image_width  > width : image_width  = width  - x
+        if y + image_height > height: image_height = height - y
 
+        logger.debug(f"DDDDDDDDDDDDrawing: DisplayPILImage: [3] IFFF: image_width({image_width}) != image.size[0]({image.size[0]}) or image_height({image_height}) != image.size[1]({image.size[1]}):")
         if image_width != image.size[0] or image_height != image.size[1]:
             image = image.crop((0, 0, image_width, image_height))
 
         (x0, y0) = (x, y)
         (x1, y1) = (x + image_width - 1, y + image_height - 1)
 
-        rgb565le = self.imageToRGB565LE(image)
+        logger.debug(f"DDDDDDDDDDDDrawing: DisplayPILImage: [4] x={x},y={y},x0={x0},y0={y0},x1={x1},y1={y1},image.size[0]={image.size[0]},image.size[1]={image.size[1]}")
 
+        rgb565le = self.imageToRGB565LE(image, use_colorshift=use_colorshift, colorshift=colorshift)
+
+        logger.debug(f"DDDDDDDDDDDDrawing: DisplayPILImage: [5] self.SendCommand(Command.DISPLAY_BITMAP, x0={x0}, y0={y0}, x1={x1}, y1={y1})")
         self.SendCommand(Command.DISPLAY_BITMAP, x0, y0, x1, y1)
 
         # Lock queue mutex then queue all the requests for the image data
@@ -248,3 +285,5 @@ class LcdCommRevA(LcdComm):
             # Write last line if needed
             if start != len(rgb565le):
                 self.SendLine(rgb565le[start:])
+
+

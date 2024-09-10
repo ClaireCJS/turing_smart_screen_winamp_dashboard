@@ -118,7 +118,7 @@ if __name__ == "__main__":
     logger.debug(f"background picture set (took {end - start:.3f} s)")
 
     # Display sample text
-    lcd_comm.DisplayText("Basic text", 50, 85)
+    lcd_comm.DisplayText("Basic text HIIIIIIIIIIIIIIIIIIIIIIIIIIIII", 50, 85)
 
     # Display custom text with solid background
     lcd_comm.DisplayText("Custom italic multiline text\nright-aligned", 5, 120,

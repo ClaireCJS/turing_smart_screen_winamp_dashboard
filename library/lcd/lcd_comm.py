@@ -26,10 +26,9 @@ import time
 from abc import ABC, abstractmethod
 from enum import IntEnum
 from typing import Tuple, List
-
 import serial
-from PIL import Image, ImageDraw, ImageFont
-
+#rom PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from library.log import logger
 
 
@@ -38,6 +37,8 @@ class Orientation(IntEnum):
     LANDSCAPE = 2
     REVERSE_PORTRAIT = 1
     REVERSE_LANDSCAPE = 3
+    #last_image
+
 
 
 class LcdComm(ABC):
@@ -69,6 +70,15 @@ class LcdComm(ABC):
         # Create a cache to store opened fonts, to avoid opening and loading from the filesystem every time
         self.font_cache = {}  # { key=(font, size), value=PIL.ImageFont }
 
+        self.last_image   = None
+        self.last_message = None
+
+    def get_orientation() -> Orientation:
+        return self.Orientation
+
+    def get_last_image(self) -> Image:
+        return self.last_image
+
     def get_width(self) -> int:
         if self.orientation == Orientation.PORTRAIT or self.orientation == Orientation.REVERSE_PORTRAIT:
             return self.display_width
@@ -81,29 +91,38 @@ class LcdComm(ABC):
         else:
             return self.display_width
 
-    def openSerial(self):
+    def openSerial(self, no_exit=True, sleep_time=5):
         if self.com_port == 'AUTO':
             self.com_port = self.auto_detect_com_port()
             if not self.com_port:
-                logger.error(
-                    "Cannot find COM port automatically, please run Configuration again and select COM port manually")
-                try:
-                    sys.exit(0)
-                except:
-                    os._exit(0)
+
+                logger.error("Cannot find COM port automatically, please run Configuration again and select COM port manually.")
+                if no_exit:
+                    logger.error(f"Sleeping {sleep_time} seconds and trying again.")
+                    time.sleep(sleep_time)
+                else:
+                    try:
+                        sys.exit(0)
+                    except:
+                        os._exit(0)
             else:
                 logger.debug(f"Auto detected COM port: {self.com_port}")
         else:
             logger.debug(f"Static COM port: {self.com_port}")
 
         try:
+            #elf.lcd_serial = serial.Serial(self.com_port,   9600, timeout=1, rtscts=1)#maybe this will push it a bit less ... or maybe it will restrict it even more, ugh
             self.lcd_serial = serial.Serial(self.com_port, 115200, timeout=1, rtscts=1)
+            #maybe try this one next: self.lcd_serial = serial.Serial(self.com_port,  57600, timeout=1, rtscts=1)#maybe this will push it a bit less ... or maybe it will restrict it even more, ugh
         except Exception as e:
-            logger.error(f"Cannot open COM port {self.com_port}: {e}")
-            try:
-                sys.exit(0)
-            except:
-                os._exit(0)
+            logger.error(f"* Cannot open COM port {self.com_port}: {e}")
+            if no_exit:
+                pass
+            else:
+                try:
+                    sys.exit(0)
+                except:
+                    os._exit(0)
 
     def closeSerial(self):
         try:
@@ -122,20 +141,54 @@ class LcdComm(ABC):
             # If no queue for async requests: do request now
             self.WriteLine(line)
 
-    def WriteLine(self, line: bytes):
+    def WriteLine(self, line: bytes, retry_infinitely=True):
         try:
             self.lcd_serial.write(line)
         except serial.serialutil.SerialTimeoutException:
             # We timed-out trying to write to our device, slow things down.
-            logger.warning("(Write line) Too fast! Slow down!")
-        except serial.serialutil.SerialException:
+            logger.warning("(Write line) Too fast! Slow down! [serialTimeoutException]")
+            try:
+                self.closeSerial()
+            except serial.serialutil.PortNotOpenError as p:
+                print(p)
+            except Exception as e:
+                print(e)
+
+            try:
+                self.Reset(sleep_time=1)       # Reset screen in case it was in an unstable state (screen is also cleared) - this is the slowest part of startup
+            except Exception as e:
+                print(e)
+
+            while True:
+                try:
+                    time.sleep(1)
+                    self.openSerial()
+                    break
+                except Exception as e:
+                    print(e)
+
+        except (serial.serialutil.SerialException, serial.serialutil.PortNotOpenError) as ee:
             # Error writing data to device: close and reopen serial port, try to write again
-            logger.error(
-                "SerialException: Failed to send serial data to device. Closing and reopening COM port before retrying once.")
-            self.closeSerial()
-            time.sleep(1)
-            self.openSerial()
-            self.lcd_serial.write(line)
+            if retry_infinitely:
+                logger.error("SerialException or PortNotOpenError: Failed to send serial data to device. Infinitely retrying.")
+                self.closeSerial()
+                time.sleep(3)
+                try:
+                    self.openSerial()
+                    self.lcd_serial.write(line)
+                except Exception as e:
+                    print(f"Resetting due to exception: {e}")
+                    try:
+                        self.reset()
+                        time.sleep(4)
+                    except Exception as e:
+                        print(e)
+            else:
+                logger.error("SerialException/PortNotOpenError: Failed to send serial data to device. Closing and reopening COM port before retrying once.")
+                self.closeSerial()
+                time.sleep(1)
+                self.openSerial()
+                self.lcd_serial.write(line)
 
     def ReadData(self, readSize: int):
         try:
@@ -200,11 +253,41 @@ class LcdComm(ABC):
     ):
         pass
 
-    def DisplayBitmap(self, bitmap_path: str, x: int = 0, y: int = 0, width: int = 0, height: int = 0):
-        image = self.open_image(bitmap_path)
-        self.DisplayPILImage(image, x, y, width, height)
+    def DisplayBitmap(self, bitmap_path: str, x: int = 0, y: int = 0, width: int = 0, height: int = 0, use_cache=True):
+        logger.debug(f"\tDisplayBitmap({bitmap_path},{x},{y},{width},{height},use_cache={use_cache})")
+        image = self.open_image(bitmap_path, use_cache=use_cache)
+        logger.debug(f"\t\tBitmap opened")
+        if image == self.last_image and use_cache:
+            logger.debug(f"\t\tNot displaying this image since it's the same as self.last_image:\n\timage={image}\n\tself.last_image={self.last_image}")
+        else:
+            logger.debug(f"\t\tDisplayPILImage(image, {x}, {y}, {width}, {height});")
+            self.last_image = image
+            try:
+                self.DisplayPILImage(image, x, y, width, height)
+            except Exception as e:
+                print(f"\t\tException for this image. Moving on. Exception={e} [X1!]")
+                return None
 
-    def DisplayText(
+
+    def load_font(self, font_path, font_size):
+        key = (font_path, font_size)
+        if key not in self.font_cache:
+            try:
+                # Load the font and cache it
+                self.font_cache[key] = ImageFont.truetype("./res/fonts/" + font_path)
+            except Exception as e:
+                print(f"Failed to load font with key of {key}: {e}")
+                raise
+
+    def get_font(self, font_path, font_size):
+        key = (font_path, font_size)
+        if key not in self.font_cache:
+            # Font not in cache, load it
+            self.load_font(font_path, font_size)
+        return self.font_cache[key]
+
+
+    def DisplayTextOriginal(
             self,
             text: str,
             x: int = 0,
@@ -221,6 +304,7 @@ class LcdComm(ABC):
     ):
         # Convert text to bitmap using PIL and display it
         # Provide the background image path to display text with transparent background
+        # modded in 2024/08/24 to work when anchor = None, not sure why that was throwing errors
 
         if isinstance(font_color, str):
             font_color = tuple(map(int, font_color.split(', ')))
@@ -246,6 +330,9 @@ class LcdComm(ABC):
             # The text bitmap is created from provided background image : text with transparent background
             text_image = self.open_image(background_image)
 
+        #current_directory = os.path.abspath(".")
+        #print(current_directory)
+
         # Get text bounding box
         if (font, font_size) not in self.font_cache:
             self.font_cache[(font, font_size)] = ImageFont.truetype("./res/fonts/" + font, font_size)
@@ -262,16 +349,16 @@ class LcdComm(ABC):
         else:
             left, top, right, bottom = x, y, x + width, y + height
 
-            if anchor.startswith("m"):
+            if anchor and anchor.startswith("m"):
                 x = (right + left) / 2
-            elif anchor.startswith("r"):
+            elif anchor and anchor.startswith("r"):
                 x = right
             else:
                 x = left
 
-            if anchor.endswith("m"):
+            if anchor and anchor.endswith("m"):
                 y = (bottom + top) / 2
-            elif anchor.endswith("b"):
+            elif anchor and anchor.endswith("b"):
                 y = bottom
             else:
                 y = top
@@ -286,58 +373,292 @@ class LcdComm(ABC):
         bottom = min(bottom, self.get_height())
 
         # Crop text bitmap to keep only the text
-        text_image = text_image.crop(box=(left, top, right, bottom))
+        #text_image = text_image.crop(box=(left, top, right, bottom))
 
         self.DisplayPILImage(text_image, left, top)
 
+
+    def DisplayText(
+            self,
+            text:              str,
+            x:                 int  = 0,
+            y:                 int  = 0,
+            width:             int  = 0,
+            height:            int  = 0,
+            font:              str  = "roboto-mono/RobotoMono-Regular.ttf",
+            font_path:         str  = "",           #this is what the above font field should have been called
+            font_size:         int  = 20,
+            font_color:        Tuple[int, int, int] = (  0,   0,   0),
+            background_color:  Tuple[int, int, int] = None,
+            background_image:  str  =  None,
+            bg_image_align:    str  =  None,
+            align:             str  = 'left',
+            anchor:            str  =  None,
+            #—————————————————————————————— new stuff:
+            use_cache:         bool =  True,
+            use_resizing:      bool = False,
+            use_colorshift:    bool = False,
+            colorshift:        Tuple[int, int, int] = (0, 0, 0),
+            darken_background: bool = False,
+            darken_factor:     float= 0.3,
+            transparent:       bool = False,
+            transparency:      int  = 255,
+    ):
+        #:param anchor:  The text anchor alignment. Determines the relative location of
+        #                the anchor to the text. The default alignment is top left,
+        #                specifically ``la`` for horizontal text and ``lt`` for
+        #                vertical text. See :ref:`text-anchors` for details.
+        #  Horizontal Text:
+        #        'la' (Left Align): Anchors text at the left side.
+        #        'ra' (Right Align): Anchors text at the right side.
+        #        'ca' (Center Align): Anchors text at the center horizontally.
+        #  Vertical Text:
+        #        'lt' (Top Left): Anchors text at the top-left corner.
+        #        'ct' (Center Top): Anchors text at the center of the top edge.
+        #        'rt' (Top Right): Anchors text at the top-right corner.
+        #        'lb' (Bottom Left): Anchors text at the bottom-left corner.
+        #        'cb' (Center Bottom): Anchors text at the center of the bottom edge.
+        #        'rb' (Bottom Right): Anchors text at the bottom-right corner.
+        #        'mc' (Middle Center): Anchors text at the center of the bounding box.
+        logger.debug(f"✏ DisplayText called(text={text},x={x},y={y},width={width},height={height},font={font},font_path={font_path},font_size={font_size},font_color={font_color},background_color={background_color},background_image={background_image},align={align},anchor={anchor},use_cache={use_cache},use_resizing={use_resizing},use_colorshift={use_colorshift},colorshift={colorshift},darken_background={darken_background},darken_factor     ={darken_factor     }")
+
+        #font is  really font_path. So if we are passed font, and no font_path
+        #it's really the font path, and we need to copy font_path into font:
+        if isinstance(font,                    str):
+            if font_path=="" and font!="": font_path=font
+
+        #again, font is really a font path, so if it's an actual font, that's wrong;
+        if isinstance(font, ImageFont.FreeTypeFont): raise ValueError("Expected 'font' to be a string representing the font file path, got a FreeTypeFont object instead.")
+
+        #now that we have a valid font path, we can retrieve the atual font, and make sure that's what it is
+        font = self.get_font(font_path,  font_size)
+        if isinstance(font,                    str): raise ValueError("Expected 'font' to be a FreeTypeFont object, got a string representing the font file path instead.")
+
+        #we also need to double check colors are proper tuples
+        if isinstance(      font_color,        str):       font_color = tuple(map(int,       font_color.split(', ')))
+        if isinstance(background_color,        str): background_color = tuple(map(int, background_color.split(', ')))
+
+        assert x <= self.get_width (), 'Text X coordinate ' + str(x) + ' must be <= display width '  + str(self.get_width ())
+        assert y <= self.get_height(), 'Text Y coordinate ' + str(y) + ' must be <= display height ' + str(self.get_height())
+        assert len(text) > 0,          'Text must not be empty'
+        assert font_size > 0,          "Font size must be > 0"
+
+        # determine height/width stuff, using display_maximum if nothing is passed
+        use_width,      use_height = self.get_width(), self.get_height()
+        if width  != 0: use_width  = width ;
+        if height != 0: use_height = height;
+
+
+        # —————————————————————————————— background image (or lack thereof) ———————————————————————————————————————
+        if background_image is None or background_image == "":                        #background_image is a string path not an Image
+            # A text bitmap is created with max width/height by default : text with solid background
+            #ext_image = Image.new('RGB' ,(use_width,use_height),background_color)
+            text_image = Image.new('RGBA',(int(use_width),int(use_height)),background_color)
+            logger.debug(f"✏DisplayText: text_image = Image.new('RGBA',(int(use_width={use_width}),int(use_height={use_height})),background_color={background_color})")
+        else:
+            # The text bitmap is created from provided background image : text with transparent background
+            text_image = self.open_image(background_image, use_cache=False)
+
+        # Get text bounding box
+        if (font, font_size) not in self.font_cache:
+            self.font_cache[(font_path, font_size)] = ImageFont.truetype("./res/fonts/" + font_path, font_size)
+        font = self.font_cache[(font_path, font_size)]
+
+        d = ImageDraw.Draw(text_image)
+        logger.debug(f" pre-height-calculation: width={width}, height={height}, self.font_cache={len(self.font_cache)}")
+        if width == 0 or height == 0:
+            left, top, right, bottom = d.textbbox((x, y), text, font=font, align=align, anchor=anchor)
+            left, top, right, bottom = int(left), int(top), int(right), int(bottom)
+            logger.debug(f" mid-height-calculation: left={left},top={top},right={right},bottom={bottom}")
+            width  = right  - left
+            height = bottom - top
+        logger.debug(f"post-height-calculation: width={width}, height={height}, self.font_cache={len(self.font_cache)}")
+
+        # —————————————————————————————— resize image to fit our area ———————————————————————————————————————
+        original_size_background = text_image
+        if use_resizing:
+            logger.debug(f"BG01:         text_image: width={width}, height={height})")
+            resized_background = resize_with_aspect_ratio(text_image, width, height, bg_image_align=bg_image_align)
+            logger.debug(f"BG02: resized_background: width={width}, height={height})")
+            if resized_background.mode != 'RGBA': resized_background = resized_background.convert('RGBA')
+            logger.debug(f"DDDDDDDrawing: WWWW: resized_background dimension is {resized_background.size[0]}x{resized_background.size[1]}")
+            next_background = resized_background
+        else:
+            next_background = original_size_background
+
+        # —————————————————————————————— optionally darken image for readibility ————————————————————————————
+        if not darken_background:
+            pass                                                                    #next_background is already correctly set
+        else:
+            background_predarkened = resized_background
+            enhancer = ImageEnhance.Brightness(resized_background)
+            darkened_background = enhancer.enhance(darken_factor)
+            if resized_background.mode != 'RGBA': resized_background = resized_background.convert('RGBA')
+            next_background = darkened_background
+
+        # —————————————————————————————— optionally shift colors for readibility ————————————————————————————
+        # shift green away to make our green text more legible
+        if not use_colorshift:
+            pass                                                                    #next_background is already correctly set
+        else:
+            colorshifted_background = next_background
+            r_shift, g_shift, b_shift = colorshift
+            pixels =               next_background.load()
+            for pix_y     in range(next_background.height):
+                for pix_x in range(next_background.width ):
+                    r, g, b, a = pixels[pix_x, pix_y]
+
+                    # colorshift color channels
+                    r = min(r + r_shift, 255)     # Ensure the value doesn't    exceed   255
+                    r = max(r          ,   0)     # Ensure the value doesn't be less than  0
+                    g = min(g + g_shift, 255)     # Ensure the value doesn't    exceed   255
+                    g = max(g          ,   0)     # Ensure the value doesn't be less than  0
+                    b = min(b + b_shift, 255)     # Ensure the value doesn't    exceed   255
+                    b = max(g          ,   0)     # Ensure the value doesn't be less than  0
+
+                    # Set the modified pixel back
+                    pixels[pix_x, pix_y] = (r, g, b, a)
+            next_background = colorshifted_background
+
+
+        # —————————————————————————————— done with background layer, save it: ————————————————————————————
+        final_background = next_background
+
+
+        # —————————————————————————————— Now create a separate image for the text layer ———————————————————————————————————————
+        alpha = transparency if transparent else 0
+        if background_color: background_color_with_alpha = background_color + (alpha,)
+        else:                background_color_with_alpha = (0,    0,    0)  + (    0,)           #might want 4th tuple to be 255 to make it default to transparent instead of black, except that makes placing new elements harder because you can't see the border if they are transparent
+        #ext_layer_image = Image.new('RGBA', (    width,     height), (0, 0, 0, 0))
+        #ext_layer_image = Image.new('RGBA', (use_width, use_height), (0, 0, 0, 0))
+        text_layer_image = Image.new('RGBA', (use_width, use_height), background_color_with_alpha)
+
+        # Now draw the text onto the current image
+        if (font_path, font_size) not in self.font_cache:
+            self.font_cache[(font_path, font_size)] = ImageFont.truetype("./res/fonts/" + font_path, font_size)
+
+        # Create a drawing context on the text layer
+        d = ImageDraw.Draw(text_layer_image)
+
+        # Calculate the text bounding box
+        logger.debug(f"DDDDDDDrawing: AAAA: width={width}, height={height}, x={x}, y={y}, anchor={anchor}")
+        if width == 0 or height == 0:
+            left , top, right, bottom = d.textbbox((x, y), text, font=font, align=align, anchor=anchor)
+            left , top                = math.floor(left), math.floor(top)
+            right, bottom             = math.ceil(right), math.ceil(bottom)
+        else:
+            left, top, right, bottom = x, y, x + width, y + height
+            logger.debug(f"Text Layer: left={left}, top={top}, right={right}, bottom={bottom} = x={x}, y={y}, x + width={x + width}, y + height={y + height}")
+
+            if   anchor and anchor.startswith("m"): x = (right + left) / 2
+            elif anchor and anchor.startswith("r"): x = right
+            else: x = left
+            if   anchor and anchor.endswith("m"): y = (bottom + top) / 2
+            elif anchor and anchor.endswith("b"): y = bottom
+            else: y = top
+        logger.debug(f"DDDDDDDrawing: BBBB: width={width}, height={height}, x={x}, y={y}, top={top}, bottom={bottom}, left={left}, right={right}, anchor={anchor}")
+        logger.debug(f"DDDDDDDrawing: BBBB: top={top}, background_image={background_image}")
+        logger.debug(f"DDDDDDDrawing  TEXT ———> '{text}' at ({x}, ***{y}***), font={font}, fill={font_color}, align={align}, anchor={anchor}")
+        #d.text((x,y), text, font=font, fill=font_color, align=align, anchor=anchor)
+        d .text((x,0), text, font=font, fill=font_color, align=align, anchor=anchor) #y is actually 0 because the text is going at y=0 *of itself*, not the same as screen-y
+
+
+
+        # ———————————————— Combine our text and image layers into one picture: Now we've created transparency! ————————————————
+        if text_layer_image.mode     != 'RGBA': text_layer_image = text_layer_image.convert('RGBA')
+        if background_image:
+            if final_background.mode != 'RGBA': final_background = final_background.convert('RGBA')
+            logger.debug(f"DDDDDDDrawing: ABOUT TO COMBINE! dim(final_background)={final_background.size[0]}x{final_background.size[1]}, dim(text_layer_image)={text_layer_image.size[0]}x{text_layer_image.size[1]}")
+            if  final_background.size[0] > text_layer_image.size[0] or final_background.size[1] > text_layer_image.size[1]:
+                final_background = final_background.crop(box=(0,0,text_layer_image.size[0],text_layer_image.size[1]))
+                # Ensure sizes are the same - very experimental 🐐
+                if final_background.size[0] != text_layer_image.size[0] or final_background.size[1] != text_layer_image.size[1]:
+                    final_background = final_background.resize(text_layer_image.size, Image.ANTIALIAS)
+            combined_image = Image.alpha_composite(final_background, text_layer_image)
+            final_image = combined_image
+        else:
+            final_image = text_layer_image
+
+        #DEBUG SITUATIONS:
+        #final_image = final_background       #JUST RIGHT!
+        #final_image = text_layer_image       #JUST RIGHT!
+
+        logger.debug(f"DDDDDDDrawing: YYYY: final_image dimension is {final_image.size[0]}x{final_image.size[1]}")
+        logger.debug(f"DDDDDDDrawing: RES0:  pre-restriction-calc values: left={left},top={top},right={right},bottom={bottom}")
+
+
+        # —————————————————————————————— final crop to ensure we' still in our correct confines ————————————————————————————————
+        # Restrict the dimensions if they overflow the display size
+        left   = max(left  , 0)
+        top    = max(top   , 0)
+        right  = min(right , self.get_width())
+        bottom = min(bottom, self.get_height())
+        logger.debug(f"DDDDDDDrawing: RES9: POST-restriction-calc values: left={left},top={top},right={right},bottom={bottom}")
+        try:
+            restricted_final_image = final_image.crop(box=(left, top, right, bottom))
+            logger.debug(f"DDDDDDDrawing: YYYZ: restricted img dims are: {restricted_final_image.size[0]}x{restricted_final_image.size[1]}")
+        except Exception as e:
+            print(f"some kinda exception with generating restricted_final_image:\n{e}")
+            import traceback
+            traceback.print_exc()
+
+
+        # —————————————————————————————— finally, draw the image! ————————————————————————————————
+        logger.debug(f"DDDDDDDrawing: ZZZZ: self.DisplayPILImage(left={left}, top={top}, final_image={final_image} .... top={top}, bottom={bottom}, left={left}, right={right}, anchor={anchor})")
+
+        self.DisplayPILImage(final_image, left, top)
+        #self.DisplayPILImage(restricted_final_image, left, top)
+
+        return final_image
+
+
+
+
+
+
     def DisplayProgressBar(self, x: int, y: int, width: int, height: int, min_value: int = 0, max_value: int = 100,
-                           value: int = 50,
-                           bar_color: Tuple[int, int, int] = (0, 0, 0),
-                           bar_outline: bool = True,
-                           background_color: Tuple[int, int, int] = (255, 255, 255),
-                           background_image: str = None):
+                           value             : int  = 50,
+                           bar_outline       : bool = True,
+                           bar_color         : Tuple[int, int, int] = (0, 0, 0),
+                           bar_outline_color : Tuple[int, int, int] = (255, 255, 255),
+                           background_color  : Tuple[int, int, int] = (255, 255, 255),
+                           background_image  : str = None):
         # Generate a progress bar and display it
         # Provide the background image path to display progress bar with transparent background
 
-        if isinstance(bar_color, str):
-            bar_color = tuple(map(int, bar_color.split(', ')))
+        if isinstance(        bar_color, str):         bar_color = tuple(map(int,         bar_color.split(', ')))
+        if isinstance( background_color, str):  background_color = tuple(map(int,  background_color.split(', ')))
+        if isinstance(bar_outline_color, str): bar_outline_color = tuple(map(int, bar_outline_color.split(', ')))
+        if bar_outline_color is None:          bar_outline_color = background+color
 
-        if isinstance(background_color, str):
-            background_color = tuple(map(int, background_color.split(', ')))
+        #print(f"background  color is {background_color}")
+        #print(f"bar         color is {bar_color}")
+        #print(f"bar outline color is {bar_outline_color}")
 
-        assert x <= self.get_width(), 'Progress bar X coordinate must be <= display width'
-        assert y <= self.get_height(), 'Progress bar Y coordinate must be <= display height'
-        assert x + width <= self.get_width(), 'Progress bar width exceeds display width'
-        assert y + height <= self.get_height(), 'Progress bar height exceeds display height'
+        assert x          <= self.get_width (),  'Progress bar X coordinate must be <= display width '
+        assert y          <= self.get_height(),  'Progress bar Y coordinate must be <= display height'
+        assert x + width  <= self.get_width (), f'Progress bar width of {width} exceeds display width of {self.get_width()}'
+        assert y + height <= self.get_height(),  'Progress bar height exceeds display height'
 
         # Don't let the set value exceed our min or max value, this is bad :)
-        if value < min_value:
-            value = min_value
-        elif max_value < value:
-            value = max_value
-
+        if       value < min_value: value = min_value
+        elif max_value <     value: value = max_value
         assert min_value <= value <= max_value, 'Progress bar value shall be between min and max'
 
         if background_image is None:
-            # A bitmap is created with solid background
-            bar_image = Image.new('RGB', (width, height), background_color)
+            bar_image = Image.new('RGB', (width, height), background_color)          # A bitmap is created with solid background
         else:
-            # A bitmap is created from provided background image
-            bar_image = self.open_image(background_image)
-
-            # Crop bitmap to keep only the progress bar background
-            bar_image = bar_image.crop(box=(x, y, x + width, y + height))
+            bar_image = self.open_image(background_image)                            # A bitmap is created from provided background image
+            bar_image = bar_image.crop(box=(x, y, x + width, y + height))            # Crop bitmap to keep only the progress bar background
 
         # Draw progress bar
         bar_filled_width = (value / (max_value - min_value) * width) - 1
-        if bar_filled_width < 0:
-            bar_filled_width = 0
+        if bar_filled_width < 0: bar_filled_width = 0
         draw = ImageDraw.Draw(bar_image)
-        draw.rectangle([0, 0, bar_filled_width, height - 1], fill=bar_color, outline=bar_color)
-
+        #raw.rectangle([0, 0, bar_filled_width, height - 1], fill=bar_color, outline=bar_color)
+        draw.rectangle([0, 0, bar_filled_width, height - 1], fill=bar_color, outline=bar_outline_color)
         if bar_outline:
-            # Draw outline
-            draw.rectangle([0, 0, width - 1, height - 1], fill=None, outline=bar_color)
+            draw.rectangle([0, 0, width - 1, height - 1], fill=None, outline=bar_outline_color)
 
         self.DisplayPILImage(bar_image, x, y)
 
@@ -355,14 +676,9 @@ class LcdComm(ABC):
         # Generate a plot graph and display it
         # Provide the background image path to display plot graph with transparent background
 
-        if isinstance(line_color, str):
-            line_color = tuple(map(int, line_color.split(', ')))
-
-        if isinstance(axis_color, str):
-            axis_color = tuple(map(int, axis_color.split(', ')))
-
-        if isinstance(background_color, str):
-            background_color = tuple(map(int, background_color.split(', ')))
+        if isinstance(line_color      , str):       line_color = tuple(map(int,       line_color.split(', ')))
+        if isinstance(axis_color      , str):       axis_color = tuple(map(int,       axis_color.split(', ')))
+        if isinstance(background_color, str): background_color = tuple(map(int, background_color.split(', ')))
 
         assert x <= self.get_width(), 'Progress bar X coordinate must be <= display width'
         assert y <= self.get_height(), 'Progress bar Y coordinate must be <= display height'
@@ -403,7 +719,7 @@ class LcdComm(ABC):
         count = 0
         for value in values:
             if not math.isnan(value):
-                # Don't let the set value exceed our min or max value, this is bad :)                
+                # Don't let the set value exceed our min or max value, this is bad :)
                 if value < min_value:
                     value = min_value
                 elif max_value < value:
@@ -595,8 +911,66 @@ class LcdComm(ABC):
         self.DisplayPILImage(bar_image, xc - radius, yc - radius)
 
     # Load image from the filesystem, or get from the cache if it has already been loaded previously
-    def open_image(self, bitmap_path: str) -> Image:
-        if bitmap_path not in self.image_cache:
-            logger.debug("Bitmap " + bitmap_path + " is now loaded in the cache")
-            self.image_cache[bitmap_path] = Image.open(bitmap_path)
-        return copy.copy(self.image_cache[bitmap_path])
+    def open_image(self, bitmap_path: str, use_cache=True) -> Image:
+        if use_cache:
+            if bitmap_path not in self.image_cache:
+                self.image_cache[bitmap_path] = Image.open(bitmap_path)
+                logger.debug("Bitmap " + bitmap_path + " is now loaded in the cache")
+            return copy.copy(self.image_cache[bitmap_path])
+        else:
+            return Image.open(bitmap_path)
+
+
+###################################
+
+def resize_with_aspect_ratio(image, target_width, target_height, bg_image_align=None):
+    logger.debug(f"CALL: resize_with_aspect_ratio(image={image}, type_of(image).__name__={type(image).__name__} target_width={target_width}, target_height={target_height}")
+    if type(image) == Image: logger.debug(f"TYPE: type_of(image) is, apparently, Image")
+    if type(image).__name__ == " PngImageFile": pass
+    if type(image).__name__ == "JpegImageFile": pass
+    logger.debug(f"TYPE: type_of(image)__name__=={type(image ).__name__}")
+
+    target_width  = int(target_width )
+    target_height = int(target_height)
+
+    #if type(image).__name__ != "Image":
+    #   msg = "ValueError: Expected 'image' to be type Image [pillow], but it was ***" + type(image).__name__ + "***"
+    #    raise ValueError(msg)
+
+    # Get original dimensions
+    original_width, original_height = image.size
+
+    # Calculate aspect ratio
+    aspect_ratio = original_width / original_height
+
+    # Calculate new dimensions
+    if target_width / target_height > aspect_ratio:
+        new_width = int(target_height * aspect_ratio)
+        new_height = target_height
+    else:
+        new_width  = target_width
+        new_height = target_width // aspect_ratio
+
+    # Resize image with maintained aspect ratio
+    logger.debug(f"RESIZE_AR1: resized_image = image.resize((new_width={new_width}, new_height={new_height}), Image.LANCZOS)")
+    resized_image = image.resize((new_width, new_height), Image.LANCZOS)
+    logger.debug(f"RESIZE_AR2: resized_image = {resized_image.size[0]}x{resized_image.size[1]}")
+    logger.debug(f"RESIZE_AR3: target_width={target_width} target_height={target_height}")
+
+    # Create a new image with the target size and paste the resized image onto it
+    final_image = Image.new('RGBA', (target_width, target_height), (0, 0, 0, 0))             #800x440
+    left = int((target_width  - new_width ) / 2)                                             #800-533/2 > 267/2 = 133.5
+    top  = int((target_height - new_height) / 2)                                             #440-440/2 >   0/2 = 0
+    logger.debug(f"RESIZE_AR4: final_image.paste(resized_image, (left={left}, top={top})")   #top is 0 when it should be 50
+    logger.debug(f"RESIZE_AR5:                —— target_WxH={target_width}x{target_height}") #target WxH  ==800x440
+    logger.debug(f"RESIZE_AR6:                ——    new_WxH={   new_width}x{   new_height}") #new(usually)==440x440
+
+    #at this point, left will usually be width of 440, with 220 on each side of center line, so left==220, and top==0 actually not 40
+    #🐐for now, we will hard-code
+    #to right align, we just need to change left to our displaywidth, minus image width
+    if bg_image_align == "right": left = target_width - resized_image.size[0]
+    final_image.paste(resized_image, (left, top))
+    logger.debug(f"RESIZE_AR7:  final_image = {final_image.size[0]}x{final_image.size[1]}")
+    return final_image
+
+#🐐
