@@ -5,7 +5,7 @@
 # please check out the project this was created from: or XuanFang
 # https://github.com/mathoudebine/turing-smart-screen-python/
 
-# Copyright (C) 2024   Claire Sawyer (claire_cjs)
+# Copyright (C) 2024   Claire Sawyer (claire_cjs) —— but only updated for LcdCommRevA
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,11 +21,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Import only the modules for LCD communication
-from library.lcd.lcd_comm_rev_a import LcdCommRevA, Orientation
-from library.lcd.lcd_comm_rev_b import LcdCommRevB
-from library.lcd.lcd_comm_rev_c import LcdCommRevC
-from library.lcd.lcd_comm_rev_d import LcdCommRevD
-from library.lcd.lcd_simulated  import LcdSimulated
+from  library.lcd.lcd_comm_rev_a import LcdCommRevA, Orientation
+#from library.lcd.lcd_comm_rev_b import LcdCommRevB
+#from library.lcd.lcd_comm_rev_c import LcdCommRevC
+#from library.lcd.lcd_comm_rev_d import LcdCommRevD
+from  library.lcd.lcd_simulated  import LcdSimulated
 
 
 
@@ -67,7 +67,7 @@ darken_factor_default = 0.6                       #how much to darken the backgr
 ####### PERFORMANCE THROTTLING CONFIG: #######
 throttle_after_drawing_clock        = 2.00        #how long to wait, in seconds, after drawing our clock             \___ testing theory that some device crashes are due to data overload    #.10 -> .25 -> -> .75 -> 1 -> 0.25 -> .75 -> 1 -> 1.25 -> 1.5 -> 2
 throttle_after_drawing_media_info   = 2.25        #how long to wait, in seconds, after drawing our media info         \___ testing theory that some device crashes are due to data overload   #.25 -> .33 -> 1.25 -> 1.5 -> 1.75 -> 2.25
-throttle_after_drawing_progress_bar = 2.50        #how long to wait, in seconds, after drawing our progress bar       /  #0.15 was de crashing on Alice Cooper — Billion Dollar Babies, and later in the song, so not a cover-art-processing issue. #.25 -> .50 -> 1 -> 2 -> 2.2 -> 2.5
+throttle_after_drawing_progress_bar = 3.00        #how long to wait, in seconds, after drawing our progress bar       /  #0.15 was de crashing on Alice Cooper — Billion Dollar Babies, and later in the song, so not a cover-art-processing issue. #.25 -> .50 -> 1 -> 2 -> 2.2 -> 2.5 -> 3.0
 throttle_after_end_of_loop          = 0.25        #this one mainly comes into play if nothing else is updating, so it doesn't need to be >2s like the others
 
 ####### COSMETIC/FONT CONFIG: #######
@@ -128,7 +128,8 @@ debug_darkening_factor  = 2.5      #/      Thus, it is a BRIGHTening. Why? To se
 
 
 ############## CONSTANTS: ##############
-orientation_to_use = Orientation.LANDSCAPE   #options & values are: Orientation.PORTRAIT=0  Orientation.LANDSCAPE=2  Orientation.REVERSE_PORTRAIT=1  Orientation.REVERSE_LANDSCAPE=3 . But this program only works in landscape
+orientation_to_use                           = Orientation.LANDSCAPE          #options & values are: Orientation.PORTRAIT=0  Orientation.LANDSCAPE=2  Orientation.REVERSE_PORTRAIT=1  Orientation.REVERSE_LANDSCAPE=3 . But this program only works in landscape
+if device_is_upside_down: orientation_to_use = Orientation.REVERSE_LANDSCAPE  #options & values are: Orientation.PORTRAIT=0  Orientation.LANDSCAPE=2  Orientation.REVERSE_PORTRAIT=1  Orientation.REVERSE_LANDSCAPE=3 . But this program only works in landscape
 
 
 
@@ -231,9 +232,9 @@ stop = False
 
 
 def split_into_columns_OLD_1(input_string, width=13):
-    chunks = [input_string[i:i+width] for i in range(0, len(input_string), width)]    # Split the string into chunks of 'width' characters
-    padded_chunks = [chunk.ljust(width) for chunk in chunks]                          # Pad each chunk to ensure it's exactly 'width' characters long
-    result = "\n".join(padded_chunks)                                                 # Join the chunks with newlines to create the final string
+    chunks = [input_string[i:i+width] for i in range(0, len(input_string), width)]          # Split the string into chunks of 'width' characters
+    padded_chunks = [chunk.ljust(width) for chunk in chunks]                                # Pad each chunk to ensure it's exactly 'width' characters long
+    result = "\n".join(padded_chunks)                                                       # Join the chunks with newlines to create the final string
     return result
 
 def split_into_columns_great_V1(input_string, width=13, height=None):
@@ -287,6 +288,13 @@ if __name__ == "__main__":
         startup_start = time.perf_counter()
         # get winamp info
         w = cjs_winamp.initialize_and_get_winamp_object()
+
+        # set up which dash we use
+        en_dash = "–"
+        em_dash = "—"
+        dash = em_dash
+        if winamp_info_monospaced_font: dash = em_dash + em_dash
+        else                          : dash = em_dash
 
         # Set the signal handlers, to send a complete frame to the LCD before exit
         def sighandler(signum, frame):
@@ -343,30 +351,37 @@ if __name__ == "__main__":
             except Exception as e:
                 dashboard_logger.debug(f"🎅🏻 Exception when initializing frame: {e}")
             try:
-                if not suppress_init: lcd_comm.Reset(sleep_time=5)       #🐐 hardcoded value                   # Reset screen in case it was in an unstable state (screen is also cleared) - this is the slowest part of startup
+                if not suppress_init: lcd_comm.Reset(sleep_time=5)          #🐐 hardcoded value                   # Reset screen in case it was in an unstable state (screen is also cleared) - this is the slowest part of startup
             except Exception as e:
                 dashboard_logger.debug(f"🥨 Exception when initializing frame: {e}")
             try:
                 lcd_reset_end        = time.perf_counter()
-                dashboard_logger.debug(f"\t(lcd reset in {lcd_reset_end - lcd_reset_start} seconds)")          # 5.01s until i realized the library had a sleep command in it and changed that into a parameter for startup-speed tweaks
-                if not suppress_init: lcd_comm.InitializeComm()                                                     # Send initialization commands
+                dashboard_logger.debug(f"\t(lcd reset in {lcd_reset_end - lcd_reset_start} seconds)")             # 5.01s until i realized the library had a sleep command in it and changed that into a parameter for startup-speed tweaks
+                if not suppress_init: lcd_comm.InitializeComm()                                                   # Send initialization commands
             except Exception as e:
                 dashboard_logger.debug(f"😑 Exception when initializing frame: {e}")
             try:
-                lcd_comm.SetBrightness(level=42)   #FIRE HAZARD OVER 50!!!!                   # must be multiples of 5, apparantly                 # Set brightness in % (warning: revision A display can get hot at high brightness! Keep value at 50% max for rev. A) #40->42
-                lcd_comm.SetBackplateLedColor(led_color=(255, 255, 255))                      # Set backplate RGB LED color (for supported HW only)
-                if device_is_upside_down: orientation_to_use = Orientation.REVERSE_LANDSCAPE
-                #TODO moved down as experiment —— maybe didn't help
-                lcd_comm.SetOrientation(orientation_to_use)                                   # Set orientation (screen starts in Portrait)
-                lcd_comm_setup_end = time.perf_counter()
+                #Set Brightness:  must be multiples of 5, apparantly —— Set brightness in % (warning: revision A display can get hot at high brightness! Keep value at 50% max for rev. A)
+                lcd_comm.SetBrightness(level=47) #🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥 ❗❗❗❗❗ FIRE HAZARD OVER 50 ❗❗❗❗❗ 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥                               #50->42->47
+                lcd_comm.SetBackplateLedColor(led_color=(255, 255, 255))                                          # Set backplate RGB LED color (for supported HW only)
             except Exception as e:
-                dashboard_logger.debug(f"🤦🏻‍♂️ Exception when initializing frame: {e}")
-            dashboard_logger.debug(f"\t(lcd startup in {lcd_comm_setup_end - lcd_comm_setup_start} seconds)") #5.01s
-            #lcd_comm.SetOrientation(orientation_to_use)                                   #TODO will this be crashy?
+                dashboard_logger.debug(f"🐞 Exception when initializing frame: {e}")
+
+            try:
+                lcd_comm.SetOrientation(orientation_to_use)                                                       # Set orientation (screen starts in Portrait)
+                dashboard_logger.debug(f"\t🔀set orientation to {orientation_to_use} [0=p,2=l,1=rev_p,3=rev_l])") #options & values are: Orientation.PORTRAIT=0  Orientation.LANDSCAPE=2  Orientation.REVERSE_PORTRAIT=1  Orientation.REVERSE_LANDSCAPE=3
+            except Exception as e:
+                dashboard_logger.debug(f"👀 Exception when initializing frame: {e}")
+
+            #timer stuff:
+            lcd_comm_setup_end = time.perf_counter()
+            dashboard_logger.debug(f"\t(lcd startup in {lcd_comm_setup_end - lcd_comm_setup_start} seconds)")     #5.01s
+
             return lcd_comm
 
 
         ############## INITIALIZE FRAME: ##############
+
         if not lcd_comm:
             if not suppress_init: lcd_comm = initialize_frame()
             #^^^^^^^^^^^🐐 still must consider if this is helping or hurting
@@ -435,21 +450,25 @@ if __name__ == "__main__":
         last_params_without_bg    = {}
         params_without_bg         = {}
 
-        # set up which dash we use
-        en_dash = "–"
-        em_dash = "—"
-        dash = em_dash
-        if winamp_info_monospaced_font: dash = em_dash + em_dash
-        else                          : dash = em_dash
-
         #conclude startup
         startup_end = time.perf_counter()
         dashboard_logger.debug(f"\t(started up in {startup_end - startup_start} seconds)") #5.26s
 
-        #infinitely loop through to keep updating our display:
+        #MAIN: THIS IS THE MAIN MAIN MAIN: infinitely loop through to keep updating our display:
         while True:
             force_frame_init = False
             main_loop_start = time.perf_counter()
+
+
+
+            dashboard_logger.debug(f"🚼🚼🚼🚼🚼 lcd_comm.successfully_reset=={lcd_comm.successfully_reset} 🚼🚼🚼🚼🚼")
+            if lcd_comm.successfully_reset:
+                powercycle_update_needed    = True
+                lcd_comm.successfully_reset = False
+            else:
+                powercycle_update_needed    = False
+
+
 
             ################################# DISPLAY CLOCK: ################################
             dashboard_logger.debug(f"\n\n\n\n🕘 TIME: decide whether to render clock or not")
@@ -457,6 +476,12 @@ if __name__ == "__main__":
                 dashboard_logger.debug("🕘 TIME: ⛔ No, not rendering the clock")
             else:
                 time_draw_start = time.perf_counter()
+                ### fixes orientation after unplugging->replugging:
+                try:
+                    lcd_comm.SetOrientation(orientation_to_use)                                                       # Set orientation (screen starts in Portrait)
+                    dashboard_logger.debug(f"\t🔀set orientation to {orientation_to_use} [0=p,2=l,1=rev_p,3=rev_l])") #options & values are: Orientation.PORTRAIT=0  Orientation.LANDSCAPE=2  Orientation.REVERSE_PORTRAIT=1  Orientation.REVERSE_LANDSCAPE=3
+                except Exception as e:
+                    dashboard_logger.debug(f"👀 Exception when initializing frame: {e}")
                 try:
                     formatted_time = datetime.now().strftime(clock_format)
                     dashboard_logger.debug(f"🕘 TIME: ✅1️⃣formatted time: {formatted_time}")
@@ -526,7 +551,7 @@ if __name__ == "__main__":
             try:
                 last_playing_status = status
                 status = w.get_playing_status()                                         #0.0003s
-                if last_playing_status != status:
+                if last_playing_status != status or powercycle_update_needed:
                     play_status_changed = True
                     force_display_winamp_info = True   #let's leave it here so the cover art doesn't disappear
                 else:
@@ -629,6 +654,9 @@ if __name__ == "__main__":
 
 
 
+
+
+
             ####################################### DISPLAY PROGRESS BAR: BEGIN ######################################
             if not display_progress_bar:
                 dashboard_logger.debug(f"🚫 NOT Displaying Progress Bar!")
@@ -680,7 +708,7 @@ if __name__ == "__main__":
 
 
             ####################################### DISPLAY WINAMP INFO: ######################################
-            if display_winamp_info or force_display_winamp_info:
+            if display_winamp_info or force_display_winamp_info or powercycle_update_needed:
                 dashboard_logger.debug(f"📺📺📺⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡ We gonna display Winamp/VLC info? ⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡⚡📺📺📺")
                 try:
                     dashboard_logger.debug(f"📺📺📺⚡⚡⚡ we'll we're gonna try, at least! 📺📺📺⚡⚡⚡")
@@ -738,6 +766,11 @@ if __name__ == "__main__":
                             try:
                                 dashboard_logger.debug(f"📺📺📺⚡⚡⚡ ✅✅✅✅✅ Drawing!!!! ✅✅✅✅ {winamp_info_for_printing}")
                                 if background_image_path_to_use and os.path.exists(background_image_path_to_use): params["background_image"] = background_image_path_to_use                     #it literally may have disappeared in the meanwhile, because the winamp plugin deletes the file if you pause or stop. We really need to use cache it when it exists, except an issue was submitted to the NowPlaying WinampPlugin to create an optio to not deletethe file on pause/stop 🐐
+                                #todo: enable image persistence when song is paused/stopped —— and if we enable that, make sure to test what happens when we switch to VLCPlayer
+                                #todo: return the generated image from lcd.comm.DisplayText and store output image in last_image variable
+                                #todo: run lcd.comm.DisplayText, submitting the last_image:
+                                #todo                 If the new image created is the same as last_image, skip drawing.
+                                #todo                 If the path to the image no longer exists, substitute last_image rather than having no image at all.
                                 lcd_comm.DisplayText(**params)
                                 last_params_without_bg=params_without_bg
                             except Exception as e:
@@ -782,76 +815,65 @@ if __name__ == "__main__":
 
 
 
+spiel_on_inspiration_for_this_project="""
+I bought a $13 5-inch screen that has software that creates a dashboard for your PC.  Mine cost $3800 in the end so I did want to monitor it more closely to know what's happening when things go bad. At 11:30pm i googled "usb lcd screen github" and found a python package that could manage it.  Stayed up past dawn and got what I wanted: What song my music player is playing on the device. It was hard to figure out how to grab winamp's various statuses via win32api calls, but someone else had a library i imported that made it a bit simpler.
+But it couldn't get the filename of the curently playing song, because they never included an api call for that in their library.
+I realized they have a playlist query and a playlist position query, so I could ask it to send the playlist, then go to the correct position in the playlist, and get the filename from there.
+But that's a lot of work just to get cover art to send to a 5-inch display.  And what if i'm running it from another computer that doesn't have access to software running on mine? I want wifey to be able to have a display telling her what song is on too, so it needs to work on her computer
 
-#I bought a $13 5-inch screen that has software that creates a dashboard for your PC.  Mine cost $3800 in the end so I did want to monitor it more closely to know what's happening when things go bad. At 11:30pm i googled "usb lcd screen github" and found a python package that could manage it.  Stayed up past dawn and got what I wanted: What song my music player is playing on the device. It was hard to figure out how to grab winamp's various statuses via win32api calls, but someone else had a library i imported that made it a bit simpler.
-#
-#But it couldn't get the filename of the curently playing song, because they never included an api call for that in their library.
-#
-#I realized they have a playlist query and a playlist position query, so I could ask it to send the playlist, then go to the correct position in the playlist, and get the filename from there.
-#
-#But that's a lot of work just to get cover art to send to a 5-inch display.  And what if i'm running it from another computer that doesn't have access to software running on mine? I want wifey to be able to have a display telling her what song is on too, so it needs to work on her computer
-#
-#Wow. Github was so useful. I found a winamp plugin that actually exports the band/artist name and current cover art to a jpg.  And  since i have all computers' harddrives mapped to all other computers', with environment varaibles for drive letters so the harcoding is the same even when the letters are diferent...
-#...i can just read those 2 files and not fuck with the api call at all, and have it work from any computer in the house? (There's 3)
-#Then, i realized they didn't support transparent text, so long song titles were obscuring the image. I need text *over* images.  The original python library didn't have support for that. It was really hard to create transparent text.
-#In the end, I found a way to combine 2 images, and rendered the text and album art images together as 1 image before sending it to the device as 1 image.
-#And that was saturday today I'm working on trying to harden the program by catching all the various exceptions so that if i unplug the screen and plug it back in, it still works.
-#Problem , my outlet is on the right, and the power port is on the left, so i had to create a frame_is_upside_down=True variable and turn the pictture upside down so the cord comes out in the right direction.
-#My current issue now is after turning the frame on and off again, it doesn't remember that things were upside down, and displays them right-side-eup, which is upside-down-for-me.
-#It may be something with how big and messy my loop code is. I've been refactoring it into functions but my management variables aren't grouped in a type (which would have been a better way to do it, i now realize) so it's kind of a pain setting up the variable passing just to make the code look prettier. But i also think if i go through the discipline of that, i'll probably find the source of upside-down-after-turning-off-and-on
-#I don't think it's quite ready to publish though. With aa music collection of 40,000 songs with differently sourced album art, there is a wide enough variance in album art that some files are technically incorrect. And this tends to crash the frame, which is a bummer. But yea, it's not designed for that, so i'm in the kitchen getting a little burned by that aspect.
-#Was it because i greens-shifted the G in my RGB value down by 64 (but bringing it back up to 0 if i hit the negative) ... in order to make my green text more readable, by removing the green underneath it?
-#I don't think so. But technically i'm re-encoding the miage when i do that, so how the fuck are some images (out of 40,000, found 2 so far, had to denote what song it was for future testing) randomly causing the frame to crash?   It definitely sends it's data really slow. The screens' framerate is literally like 0.5fps if you're drawing the whole screen. It's not made for this.
-#I'm hoping i can figure out the image problem. I thought they were being re-encoded internally, so i wonder if the library to convert them isn't handling malformed images correctly, adn if i need to submit a github issue to the author of that library. But then i'm beholden to waiting for him to fix it, and i'm really obsessed with this and the fix might not come for months.
-#Better to find  it myself.
-
+Wow. Github was so useful. I found a winamp plugin that actually exports the band/artist name and current cover art to a jpg.  And  since i have all computers' harddrives mapped to all other computers', with environment varaibles for drive letters so the harcoding is the same even when the letters are diferent...
+...i can just read those 2 files and not fuck with the api call at all, and have it work from any computer in the house? (There's 3)
+Then, i realized they didn't support transparent text, so long song titles were obscuring the image. I need text *over* images.  The original python library didn't have support for that. It was really hard to create transparent text.
+In the end, I found a way to combine 2 images, and rendered the text and album art images together as 1 image before sending it to the device as 1 image.
+And that was saturday today I'm working on trying to harden the program by catching all the various exceptions so that if i unplug the screen and plug it back in, it still works.
+Problem , my outlet is on the right, and the power port is on the left, so i had to create a frame_is_upside_down=True variable and turn the pictture upside down so the cord comes out in the right direction.
+My current issue now is after turning the frame on and off again, it doesn't remember that things were upside down, and displays them right-side-eup, which is upside-down-for-me.
+It may be something with how big and messy my loop code is. I've been refactoring it into functions but my management variables aren't grouped in a type (which would have been a better way to do it, i now realize) so it's kind of a pain setting up the variable passing just to make the code look prettier. But i also think if i go through the discipline of that, i'll probably find the source of upside-down-after-turning-off-and-on
+I don't think it's quite ready to publish though. With aa music collection of 40,000 songs with differently sourced album art, there is a wide enough variance in album art that some files are technically incorrect. And this tends to crash the frame, which is a bummer. But yea, it's not designed for that, so i'm in the kitchen getting a little burned by that aspect.
+Was it because i greens-shifted the G in my RGB value down by 64 (but bringing it back up to 0 if i hit the negative) ... in order to make my green text more readable, by removing the green underneath it?
+I don't think so. But technically i'm re-encoding the miage when i do that, so how the fuck are some images (out of 40,000, found 2 so far, had to denote what song it was for future testing) randomly causing the frame to crash?   It definitely sends it's data really slow. The screens' framerate is literally like 0.5fps if you're drawing the whole screen. It's not made for this.
+I'm hoping i can figure out the image problem. I thought they were being re-encoded internally, so i wonder if the library to convert them isn't handling malformed images correctly, adn if i need to submit a github issue to the author of that library. But then i'm beholden to waiting for him to fix it, and i'm really obsessed with this and the fix might not come for months.
+Better to find  it myself.
+"""
 
 
 
 chat_gps_spiel_on_power_cycling_usb_devices="""
 Yes, many modern PCs have USB ports that can be controlled by the operating system or software to turn on and off. This feature is often used for power management, but it can also be used to power cycle devices connected to those ports. Here's how you can achieve this:
 
-1. Using Windows Device Manager:
-Steps:
-
-Open Device Manager.
-Expand the "Universal Serial Bus controllers" section.
-Right-click on the USB Root Hub (there may be multiple) and select "Properties."
-Go to the "Power Management" tab.
-Check or uncheck "Allow the computer to turn off this device to save power."
-Limitations: This method relies on power-saving features and might not provide direct on-demand control.
-
-2. Using USB Hub with Power Control:
-Hardware-Based Solution:
-Some USB hubs come with switches or software control that allows you to turn individual ports on and off. This is useful if you want hardware-level control over power cycling.
-3. Using Software Control:
-USBDeview (by NirSoft):
-A free utility that allows you to enable/disable USB devices connected to your computer. This can be used to power cycle the device.
-DevCon (Microsoft's Device Console):
-A command-line tool that can enable/disable devices, including USB ports, allowing you to create scripts to power cycle devices.
-4. Motherboard-Specific Software:
-BIOS/UEFI Settings:
+1. Using Windows Device Manager: Steps: Open Device Manager. Expand the "Universal Serial Bus controllers" section.
+Right-click on the USB Root Hub (there may be multiple) and select "Properties." Go to the "Power Management" tab.
+Check or uncheck "Allow the computer to turn off this device to save power." Limitations: This method relies on power-saving features and might not provide direct on-demand control.
+2. Using USB Hub with Power Control: Hardware-Based Solution: Some USB hubs come with switches or software control that allows you to turn individual ports on and off. This is useful if you want hardware-level control over power cycling.
+3. Using Software Control: USBDeview (by NirSoft): A free utility that allows you to enable/disable USB devices connected to your computer. This can be used to power cycle the device.
+DevCon (Microsoft's Device Console): A command-line tool that can enable/disable devices, including USB ports, allowing you to create scripts to power cycle devices.
+4. Motherboard-Specific Software: BIOS/UEFI Settings:
 
 Some motherboards allow USB port control through BIOS/UEFI settings. This is typically more common in high-end motherboards.
 Manufacturer Software:
-
 Some manufacturers provide utilities that allow you to control USB ports, especially on gaming or workstation motherboards.
-5. Advanced Power Management (APM) API:
-For Developers:
+
+5. Advanced Power Management (APM) API: For Developers:
 If you’re comfortable with programming, you can use Windows APIs to control USB ports programmatically.
-Considerations:
-Not all USB ports or motherboards support on-demand power cycling.
+Considerations: Not all USB ports or motherboards support on-demand power cycling.
 Some devices may not respond well to power cycling via software control, so hardware solutions like a controllable USB hub might be more reliable.
 This feature is particularly useful for troubleshooting or resetting USB devices without physically unplugging them.
+"""
 
 
+rejected_todos="""
+REJECTED TODO: DRAW CLOCK WITH BG THAT IS CACHED SECTION OF OTHER IMAGE SO IT'S TRANSLUCENt. maybe merge it together with other updates if they exist, or just update the clock if they don't. However, this is a LOT of work just to save a single clock update, so nah, let's not do this.
+"""
 
 
-
-
-
-"""#### TODO DRAW CLOCK WITH BG THAT IS CACHED SECTION OF OTHER IMAGE SO IT'S TRANSLUCENt. maybe merge it together.
-
+#songs_that_crash_us="""
+#
 #SONGS THAT CRASH THE SCREEN:
 #DEFNITELY - twice C:\mp3\Ramones\1987 - Halfway To Sanity\01_I Wanna Live.flac
+#
 #??        C:\mp3\NoFX\2020 - NOFX vs Frank Turner - West Coast vs Wessex\07_Frank Turner - Bob (by NoFX).flac
+#
+#American Dad: Krampus & Steve - Krampus And...(?)
+#
+#"""
+

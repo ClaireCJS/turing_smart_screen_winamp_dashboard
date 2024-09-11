@@ -54,10 +54,12 @@ class SubRevision(Enum):
 # This class is for Turing Smart Screen (rev. A) 3.5" and UsbMonitor screens (all sizes)
 class LcdCommRevA(LcdComm):
     def __init__(self, com_port: str = "AUTO", display_width: int = 320, display_height: int = 480,
-                 update_queue: queue.Queue = None):
+                 update_queue: queue.Queue = None, successfully_reset = False):
         logger.debug("HW revision: A")
         LcdComm.__init__(self, com_port, display_width, display_height, update_queue)
+        #trash successfully_reset = self.openSerial()
         self.openSerial()
+        #garbtrashtrastrash logger.debug(f"Successfully_[re]opened = {successfully_reset}")
 
     def __del__(self):
         self.closeSerial()
@@ -213,17 +215,22 @@ class LcdCommRevA(LcdComm):
         b = rgb[:, 2].astype(np.uint16)
 
         # shift if asked
-        if use_colorshift: (r_shift, g_shift, b_shift) = colorshift
-        else:              (r_shift, g_shift, b_shift) = (0, 0, 0)
+        if use_colorshift:
+            (r_shift, g_shift, b_shift) = colorshift
+            r_shift = 3 + r_shift
+            g_shift = 2 + g_shift
+            b_shift = 3 + b_shift
+            #if we wanted random shifting, it could look a bit like this:     #import random        #random.randint(-2, 2)        #g_shift = g_shift + random.randint(1, 2)
+            # construct RGB565
+            r = (r >> r_shift)
+            g = (g >> g_shift)  #is all this actually what's causing the instability? we'll see 🤔🤔🤔 🐐
+            b = (b >> b_shift)
+        else:
+            # construct RGB565
+            r = (r >> 3)
+            g = (g >> 2)
+            b = (b >> 3)
 
-        # construct RGB565
-        r_shift = 3 + r_shift
-        g_shift = 2 + g_shift
-        b_shift = 3 + b_shift
-        #if we wanted random shifting, it could look a bit like this:     #import random        #random.randint(-2, 2)        #g_shift = g_shift + random.randint(1, 2)
-        r = (r >> r_shift)
-        g = (g >> g_shift)
-        b = (b >> b_shift)
         rgb565 = (r << 11) | (g << 5) | b
 
         # serialize to little-endian

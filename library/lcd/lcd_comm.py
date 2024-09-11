@@ -45,6 +45,7 @@ class LcdComm(ABC):
     def __init__(self, com_port: str = "AUTO", display_width: int = 320, display_height: int = 480,
                  update_queue: queue.Queue = None):
         self.lcd_serial = None
+        self.successfully_reset = False
 
         # String containing absolute path to serial port e.g. "COM3", "/dev/ttyACM1" or "AUTO" for auto-discovery
         self.com_port = com_port
@@ -92,10 +93,11 @@ class LcdComm(ABC):
             return self.display_width
 
     def openSerial(self, no_exit=True, sleep_time=5):
+        self.successfully_reset = False
         if self.com_port == 'AUTO':
             self.com_port = self.auto_detect_com_port()
             if not self.com_port:
-
+                self.successfully_reset = False
                 logger.error("Cannot find COM port automatically, please run Configuration again and select COM port manually.")
                 if no_exit:
                     logger.error(f"Sleeping {sleep_time} seconds and trying again.")
@@ -106,15 +108,18 @@ class LcdComm(ABC):
                     except:
                         os._exit(0)
             else:
-                logger.debug(f"Auto detected COM port: {self.com_port}")
+                logger.debug(f"Auto detected COM port: {self.com_port} 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀")
+                self.successfully_reset = True
         else:
-            logger.debug(f"Static COM port: {self.com_port}")
+            self.successfully_reset = True
+            logger.debug(f"Static COM port: {self.com_port} 🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀🚀")
 
         try:
             #elf.lcd_serial = serial.Serial(self.com_port,   9600, timeout=1, rtscts=1)#maybe this will push it a bit less ... or maybe it will restrict it even more, ugh
             self.lcd_serial = serial.Serial(self.com_port, 115200, timeout=1, rtscts=1)
             #maybe try this one next: self.lcd_serial = serial.Serial(self.com_port,  57600, timeout=1, rtscts=1)#maybe this will push it a bit less ... or maybe it will restrict it even more, ugh
         except Exception as e:
+            self.successfully_reset = False
             logger.error(f"* Cannot open COM port {self.com_port}: {e}")
             if no_exit:
                 pass
@@ -170,7 +175,8 @@ class LcdComm(ABC):
         except (serial.serialutil.SerialException, serial.serialutil.PortNotOpenError) as ee:
             # Error writing data to device: close and reopen serial port, try to write again
             if retry_infinitely:
-                logger.error("SerialException or PortNotOpenError: Failed to send serial data to device. Infinitely retrying.")
+                logger.error("⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ DEVICE UNPLUGGED?!?! ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠")
+                logger.error("⚠⚠⚠  SerialException or PortNotOpenError: Failed to send serial data to device ⚠⚠⚠ ———— ♾♾♾♾♾  Infinitely retrying ♾♾♾♾♾")
                 self.closeSerial()
                 time.sleep(3)
                 try:

@@ -24,10 +24,10 @@ To get this to work:
     * *Unzip* [Aldviva's](https://github.com/Aldaviva) [NowPlayingToFile plugin](https://github.com/Aldaviva/WinampNowPlayingToFile/releases/latest/download/WinampNowPlayingToFile.zip) into your ```WinAmp``` *base* folder, right next to ```WinAmp.exe```. 
     * *Restart* ```WinAmp```
     * Go into ```WinAmp->Preferences```, to the ```Plug-ins``` section (closer to the bottom)
-    * Expand the ```Plug-ins``` section to locate the ```General Purpose``` settings (5 lines underneath)
+    * *Expand* the ```Plug-ins``` section to locate the ```General Purpose``` settings (5 lines underneath)
     * In the *right* pane, your plugins should be listed, and you should see ```Now Playing To File v2.2.0``` as one of the plugins.
     * Click ```Configure selected plug-in``` to open up the ```Now Playing To File plug-in configuration``` pop-up.
-    * If you change the format of the plugin's info file, please only add new stuff to the end 😉
+    * If you change the format of the plugin's info file, please only add new stuff to the end 🙏🏻
     * Change the ```Save album art as``` file location if you are inclined and adventurous  
       (If you do, make sure to change both locations, so that they stay in the same folder together.)
     * Take note of the ```Save album art as``` location — whether you changed it or not.
