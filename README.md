@@ -28,14 +28,12 @@ To get this to work:
     * In the *right* pane, your plugins should be listed, and you should see ```Now Playing To File v2.2.0``` as one of the plugins.
     * Click ```Configure selected plug-in``` to open up the ```Now Playing To File plug-in configuration``` pop-up.
     * If you change the format of the plugin's info file, please only add new stuff to the end 🙏🏻
-    * Change the ```Save album art as``` file location if you are inclined and adventurous  
-      (If you do, make sure to change both locations, so that they stay in the same folder together.)
     * Take note of the ```Save album art as``` location — whether you changed it or not.
-    * Go to the next track, and verify that the album art correctly saved to that location
+    * Go to the next song in ```WinAmp``` and verify that the *new album art* correctly saved to that location
 
 1. Let this program know where those files are.
-    * set an environment variable called ```NOW_PLAYING_SONG_INFO``` to point to the location of the txt file
-    * set an environment variable called ```NOW_PLAYING_ALBUM_ART``` to point to the location of the jpg file
+    * set an environment variable called ```NOW_PLAYING_SONG_INFO``` to point to the location of the **txt** file
+    * set an environment variable called ```NOW_PLAYING_ALBUM_ART``` to point to the location of the **jpg** file
 ```
    rem EXAMPLE:
    set NOW_PLAYING_ALBUM_ART=c:\mp3\lists\winamp_now_playing.jpg
